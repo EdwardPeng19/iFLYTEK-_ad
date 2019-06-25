@@ -168,13 +168,13 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
         n_jobs=4
     )
     features = category_features + numerical_features
+    train_y = train_x[label]
     train_x = train_x[features].values
     test_x = test_x[features].values
-    train_y = train[label]
 
     if cv:
         n_fold = 5
-
+        result = np.zeros((test.shape[0],class_num))
         skf = StratifiedKFold(n_splits=n_fold, shuffle=True, random_state=2019)
         kfold = skf.split(train_x, train_y)
         count_fold = 0
@@ -182,19 +182,21 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
             print("training......fold",count_fold)
             count_fold = count_fold + 1
             k_x_train = train_x[train_index]
-            k_y_train = train_y.loc[train_index]
+            k_y_train = train_y[train_index]
             k_x_vali = train_x[vali_index]
-            k_y_vali = train_y.loc[vali_index]
+            k_y_vali = train_y[vali_index]
 
             clf.fit(k_x_train, k_y_train,eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],early_stopping_rounds=200, verbose=False)
             val_pred = clf.predict(k_x_vali, num_iteration=clf.best_iteration_)
             test_pred = clf.predict(test_x, num_iteration=clf.best_iteration_)
             test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
-
+            result = result + test_pred_proba
+        result = result/n_fold
     else:
         clf.fit(train_x, train_y)
         test_pred = clf.predict(test_x)
         test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
 
-    return test_pred
+        result = test_pred_proba
+    return result
 
