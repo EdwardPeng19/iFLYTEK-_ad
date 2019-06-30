@@ -3,11 +3,21 @@ import numpy as np
 import time
 import requests
 import json
+import sys
 import datetime
 DATA = './data/'
 MODEL = './model/'
 
-
+import re
+ip_database = []
+with open(DATA + 'CN_ips.txt') as ipfile:
+    flines = ipfile.readlines()
+    for l in flines:
+        a = re.sub(' +', ' ', l.rstrip('\n'))
+        ip_database.append(a.split(' ',3))
+ip_database = pd.DataFrame(ip_database, columns=['ips','ipe','add','com'])
+print(ip_database.shape)
+ip_database.to_csv(DATA+'cn_ips.csv', encoding='utf-8', index=False)
 
 def time_format(data):
     data['nginxtime_format'] = data.apply(lambda x: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(x['nginxtime'] / 1000)), axis=1)
@@ -24,22 +34,131 @@ def md5_format(data):
     data['openudidmd5_0'] = data.apply(lambda x: 0 if x['openudidmd5'] == 'empty' else 1, axis=1)
     data['macmd5_0'] = data.apply(lambda x: 0 if x['macmd5'] == 'empty' else 1, axis=1)
     return data
-def ip_info(ip):
-    url = f'http://ip.360.cn/IPQuery/ipquery?ip={ip}'
-    address_detail = json.loads(requests.get(url).text)['data']
-    print(address_detail)
-    return address_detail
 
+def ip_cate(ip):
+    try:
+        f_info = int(ip.split('.')[0])
+    except:
+        return 6
+    if f_info >=1 and f_info<=126:
+        return 1
+    elif f_info == 127:
+        return -1
+    elif f_info >=128 and f_info<=191:
+        return 2
+    elif f_info >=192 and f_info<=223:
+        return 3
+    elif f_info >=224 and f_info<=239:
+        return 4
+    else:
+        return 5
+
+def ip_network(ip, ip_cate):
+    if ip_cate==1:
+        return ip.split('.')[0]
+    elif ip_cate==2:
+        return ip.split('.')[0] + '.' + ip.split('.')[1]
+    elif ip_cate==3:
+        return ip.split('.')[0] + '.' + ip.split('.')[1] + '.' + ip.split('.')[1]
+    else:
+        return -1
+
+def device_blacklist_pro(df_train, df_test):
+    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5']
+    for wbl in wblist:
+        bl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 1)].groupby(wbl).size().reset_index(
+            name=wbl + 'bl')
+        wl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 0)].groupby(wbl).size().reset_index(
+            name=wbl + 'wl')
+        df_test = df_test.merge(bl, how='left', on=wbl)
+        df_test = df_test.merge(wl, how='left', on=wbl)
+        df_test[wbl + 'bl'] = df_test[wbl + 'bl'].fillna(0)
+        df_test[wbl + 'wl'] = df_test[wbl + 'wl'].fillna(0)
+    return df_test
+def device_blacklist(train, test):
+    train_pro = train[train['nginxtime_date'] == '2019-06-03']
+    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5']
+    for wbl in wblist:
+        train_pro[wbl + 'bl'] = train_pro['label']
+        train_pro[wbl + 'wl'] = train_pro['label']
+    #train_pro = pd.DataFrame()
+    for showdate in ['2019-06-04', '2019-06-05', '2019-06-06', '2019-06-07', '2019-06-08', '2019-06-09']:
+        print(f'bwlist pro......{showdate}')
+        df_test = train[train['nginxtime_date']==showdate]
+        df_train = train[train['nginxtime_date']<showdate]
+        df_test = device_blacklist_pro(df_train, df_test)
+        train_pro = train_pro.append(df_test)
+
+    test = device_blacklist_pro(train, test)
+    return train_pro, test
+
+def black_rate_pro(df_train, df_test):
+    features = ['city','adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5',
+                'pro2','adunitshowid','mediashowid','apptype','nginxtime']
+    for fr in features:
+        sta_df = df_train.groupby(fr).agg({'label': 'sum', 'sid': 'count'}).reset_index()
+        sta_df[fr+'_rate'] = sta_df['label'] / sta_df['sid']
+        df_test = df_test.merge(sta_df[[fr, fr+'_rate']], how='left', on=fr)
+        df_test[fr+'_rate'] = df_test[fr+'_rate'].fillna(0.0)
+    print(df_train.shape, df_test.shape)
+    return df_test
+def black_rate(train, test):
+    train_pro = train[train['nginxtime_date'] == '2019-06-03']
+    for showdate in ['2019-06-04', '2019-06-05', '2019-06-06', '2019-06-07', '2019-06-08', '2019-06-09']:
+        print(f'black rate  pro......{showdate}')
+        df_test = train[train['nginxtime_date']==showdate]
+        df_train = train[train['nginxtime_date']<showdate]
+        df_test = black_rate_pro(df_train, df_test)
+        train_pro = train_pro.append(df_test)
+    test = black_rate_pro(train, test)
+    return train_pro, test
+def ip2decimalism(ip):
+    dec_value = 0
+    v_list = ip.split('.')
+    v_list.reverse()
+    t = 1
+    try:
+        for v in v_list:
+            dec_value += int(v) * t
+            t = t * (2 ** 8)
+        return dec_value
+    except:
+        return -1
 def model_input():
     train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
     test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
+
     train = time_format(train) # 2019-06-03 2019-06-09
     test = time_format(test) # 2019-06-10
 
     train = md5_format(train)
     test = md5_format(test)
-    #train['ip_info'] = train.apply(lambda x: ip_info(x['ip']), axis=1)
-    #test['ip_info'] = test.apply(lambda x: ip_info(x['ip']), axis=1)
+
+    city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
+    city_pro.columns = ['pro2', 'city']
+    train = train.merge(city_pro, how='left', on='city')
+    test = test.merge(city_pro, how='left', on='city')
+
+    train['ipnum'] = train.apply(lambda x: ip2decimalism(x['ip']), axis=1)
+    test['ipnum'] = test.apply(lambda x: ip2decimalism(x['ip']), axis=1)
+    train['reqrealipnum'] = train.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
+    test['reqrealipnum'] = test.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
+
+    train['ip_cate'] = train.apply(lambda x: ip_cate(x['ip']), axis=1)
+    test['ip_cate'] = test.apply(lambda x: ip_cate(x['ip']), axis=1)
+    train['reqrealip_cate'] = train.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    test['reqrealip_cate'] = test.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    train['ip_net'] = train.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+    test['ip_net'] = test.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+
+    train['hw'] = train['h']*train['w']
+    test['hw'] = test['h']*test['w']
+    #设备黑白名单处理
+    train, test = device_blacklist(train, test)
+
+    #黑名单率统计
+    train, test = black_rate(train, test)
+
     print(train.columns)
     print(test.columns)
     train.to_csv(MODEL + 'train.csv', encoding='utf-8', index=False)
@@ -48,4 +167,19 @@ def model_input():
 if __name__ == "__main__":
     model_input()
 
+'''
+Index(['sid', 'pkgname', 'ver', 'adunitshowid', 'mediashowid', 'apptype',
+       'nginxtime', 'ip', 'city', 'province', 'reqrealip', 'adidmd5',
+       'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5', 'dvctype', 'model',
+       'make', 'ntt', 'carrier', 'os', 'osv', 'orientation', 'lan', 'h', 'w',
+       'ppi', 'nginxtime_format', 'nginxtime_date', 'nginxtime_time',
+       'nginxtime_hour', 'nginxtime_week', 'adidmd5_0', 'imeimd5_0',
+       'idfamd5_0', 'openudidmd5_0', 'macmd5_0', 'pro2', 'ipnum',
+       'reqrealipnum', 'ip_cate', 'reqrealip_cate', 'ip_net', 'hw',
+       'adidmd5bl', 'adidmd5wl', 'imeimd5bl', 'imeimd5wl', 'idfamd5bl',
+       'idfamd5wl', 'openudidmd5bl', 'openudidmd5wl', 'macmd5bl', 'macmd5wl',
+       'city_rate', 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate',
+       'openudidmd5_rate', 'macmd5_rate', 'pro2_rate', 'adunitshowid_rate',
+       'mediashowid_rate', 'apptype_rate', 'nginxtime_rate'],
 
+'''

@@ -165,7 +165,7 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
         subsample_freq=1,
         colsample_bytree=0.8,
         random_state=2019,
-        n_jobs=4
+        n_jobs=6
     )
     features = category_features + numerical_features
     train_y = train_x[label]
@@ -193,10 +193,15 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
             result = result + test_pred_proba
         result = result/n_fold
     else:
-        clf.fit(train_x, train_y)
+        clf.fit(train_x, train_y,)
         test_pred = clf.predict(test_x)
         test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
 
         result = test_pred_proba
+        featureImportances = clf.feature_importances_
+        print(featureImportances)
+        for f,fi in zip(features,list(featureImportances)):
+            print(f,fi)
+
     return result
 
