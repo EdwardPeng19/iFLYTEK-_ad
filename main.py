@@ -49,6 +49,9 @@ if __name__ == "__main__":
                               'nginxtime_hour','nginxtime_week',
                               'dvctype','ntt','carrier','orientation','h','w','ppi','hw',
                               'adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
+                              'city_rate', 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate',
+                              'openudidmd5_rate', 'macmd5_rate', 'pro2_rate', 'adunitshowid_rate',
+                              'mediashowid_rate', 'apptype_rate', 'nginxtime_rate'
                               ],
         'label':'label'
     }
@@ -71,8 +74,7 @@ if __name__ == "__main__":
 0.7547364405702094 time:340.9751136302948
 0.9053778269984885 time:570.2333481311798 
 
-f1 score 0.9334072790294627  93.43196
-f1 score 0.9353023520117532  93.71961
-f1 score 0.9354539154539154 
-f1 score 0.9355596681291717 cv
+f1 score 0.9336021114320747  93.99
+f1 score 0.9337018492927132
+
 '''
