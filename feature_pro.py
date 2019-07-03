@@ -94,7 +94,9 @@ def device_blacklist(train, test):
 
 def black_rate_pro(df_train, df_test):
     features = ['city','adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5',
-                'pro2','adunitshowid','mediashowid','apptype','nginxtime']
+                'pro2','adunitshowid','mediashowid','apptype','nginxtime',
+                'ip_cate','reqrealip_cate',
+                'dvctype','ntt','carrier','os','orientation',]
     for fr in features:
         sta_df = df_train.groupby(fr).agg({'label': 'sum', 'sid': 'count'}).reset_index()
         sta_df[fr+'_rate'] = sta_df['label'] / sta_df['sid']
@@ -112,6 +114,7 @@ def black_rate(train, test):
         train_pro = train_pro.append(df_test)
     test = black_rate_pro(train, test)
     return train_pro, test
+
 def ip2decimalism(ip):
     dec_value = 0
     v_list = ip.split('.')
