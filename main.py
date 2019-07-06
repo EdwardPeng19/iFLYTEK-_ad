@@ -4,27 +4,26 @@ from sklearn.metrics import f1_score
 import sys
 import warnings
 warnings.filterwarnings('ignore')
+
+def cut_hour(x):
+    if x>=12 and x<=21:
+        return 1
+    elif x>=22 and x<=11 :
+        return 2
+    else:
+        return 3
 if __name__ == "__main__":
-    train = pd.read_csv(MODEL + 'train.csv', encoding='utf-8')
-    test = pd.read_csv(MODEL + 'test.csv', encoding='utf-8')
-    print(train.columns)
-    fillna_features = ['city','lan','ver','model','make','osv','pro2']
-    for ff in fillna_features:
-        train[ff] = train[ff].fillna('null')
-        test[ff] = test[ff].fillna('null')
-
-    train['dvctype'] = train['dvctype'].astype(int)
-    test['dvctype'] = test['dvctype'].astype(int)
-    train['ntt'] = train['ntt'].astype(int)
-    test['ntt'] = test['ntt'].astype(int)
-    train['carrier'] = train['carrier'].astype(int)
-    test['carrier'] = test['carrier'].astype(int)
-
-    train['adid_imei'] = train['adidmd5_0'] + train['imeimd5_0']
-    train['adid_idfa'] = train['adidmd5_0'] + train['idfamd5_0']
-    train['adid_openudid'] = train['adidmd5_0'] + train['openudidmd5_0']
-    train['adid_mac'] = train['adidmd5_0'] + train['macmd5_0']
-
+    # train = pd.read_csv(MODEL + 'train.csv', encoding='utf-8')
+    # test = pd.read_csv(MODEL + 'test.csv', encoding='utf-8')
+    with open(MODEL + 'train.pk', 'rb') as train_f:
+        train = pickle.load(train_f)
+    with open(MODEL + 'test.pk', 'rb') as test_f:
+        test = pickle.load(test_f)
+    train['nginxtime_hour'] = train['nginxtime_hour'].astype(float)
+    test['nginxtime_hour'] = test['nginxtime_hour'].astype(float)
+    train['nginxtime_hour'] = train.apply(lambda  x: cut_hour(x['nginxtime_hour']), axis=1)
+    test['nginxtime_hour'] = test.apply(lambda x: cut_hour(x['nginxtime_hour']), axis=1)
+    #特征处理
     offline = False
     if offline:
         model_train = train[(train['nginxtime_date'] != '2019-06-09') & (train['nginxtime_date'] > '2019-06-03')]
@@ -32,60 +31,49 @@ if __name__ == "__main__":
     else:
         model_train = train
         model_test = test
-    label = 'label'
-    """
-    基本信息 sid label
-    媒体信息 pkgname ver adunitshowid mediashowid apptype 
-    时间  nginxtime_hour
-    ip信息  city province
-    设备信息 
-    """
-    features = {
-        'category_features':['pkgname','adunitshowid','mediashowid','ver',
-            'city',
-            'lan','make','model','os','osv',
-            'pro2'],
-        'numerical_features':['apptype',
-                              'province','ip_cate',
-                              'nginxtime_hour','nginxtime_week',
-                              'dvctype','ntt','carrier','orientation','h','w','ppi','hw',
-                              'adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
-                              'city_rate', 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate',
-                              'openudidmd5_rate', 'macmd5_rate', 'pro2_rate', 'adunitshowid_rate',
-                              'mediashowid_rate', 'apptype_rate','nginxtime_rate'
 
-                              ],
-        'onehot_features': ['pkgname','adunitshowid','mediashowid','ver',
-            'city',
-            'lan','make','model','os','osv',
-            'pro2'],
+    label = 'label'
+    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate',
+                          'openudidmd5_rate', 'macmd5_rate',]
+    wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl',]
+    label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2']
+
+    category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model',
+                                'nginxtime_hour',
+                                ]
+    category_nullone_features = ['apptype', 'dvctype',   'ip_cate',  'ntt',  'carrier', 'orientation', 'province']
+    numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
+
+
+                          ] + rate_features + wl_features
+    #
+    features = {
+        'label_features':label_features,
+        'category_features1':category_onehot_features,
+        'category_features2':category_nullone_features,
+        'numerical_features':numerical_features,
         'label':'label'
     }
     model_type='lgb'
     t1 = time.time()
-    pre_proba = class_model(model_train, model_test, features, model_type,class_num=2,cv=False)
+    train_pre_proba,test_pre_proba = class_model(model_train, model_test, features, model_type,class_num=2,cv=True)
 
     print(f"train use times {time.time() - t1}")
-    model_test['pre_proba'] = pre_proba[:, 1]
+    model_test['pre_proba'] = test_pre_proba[:, 1]
+    model_train['pre_proba'] = train_pre_proba[:,1]
+    model_train['pre_label'] = model_train.apply(lambda x: 1 if x['pre_proba'] > 0.5 else 0, axis=1)
+    train_f1 = f1_score(model_train['label'], model_train['pre_label'])
     if offline:
-        #model_test['pre_proba'] = model_test.apply(lambda x: add_proba(x['pre_proba'], x['bl_sum']), axis=1)
         model_test['pre_label'] = model_test.apply(lambda x: 1 if x['pre_proba'] > 0.5 else 0, axis=1)
-        f1 = f1_score(model_test['label'], model_test['pre_label'])
-        print('f1 score',f1)
+        test_f1 = f1_score(model_test['label'], model_test['pre_label'])
+        print(f'f1 train_score {train_f1} , f1 test_score {test_f1}')
     else:
         model_test['label'] = model_test.apply(lambda x: 1 if x['pre_proba']>0.5 else 0, axis=1)
         model_test[['sid','label']].to_csv('submit/submission.csv', index=False, encoding='utf-8')
 
-'''
-0.7547364405702094 time:340.9751136302948
-0.9053778269984885 time:570.2333481311798 
-
-f1 score 0.9336021114320747  93.99
-f1 score 0.9337018492927132  94.10357
-
-f1 score 0.9339196643185639
-f1 score 0.9339468132356207
-'''
+        model_train[['sid', 'pre_proba']].to_csv(MODEL + 'train_track.csv', index=False, encoding='utf-8')
+        model_test[['sid', 'pre_proba']].to_csv(MODEL + 'test_track.csv', index=False, encoding='utf-8')
+        print(f'{train_f1} f1 score')
 
 '''
 Index(['adidmd5', 'adidmd5_0', 'adidmd5_rate', 'adidmd5bl', 'adidmd5wl',
@@ -103,4 +91,11 @@ Index(['adidmd5', 'adidmd5_0', 'adidmd5_rate', 'adidmd5bl', 'adidmd5wl',
        'os', 'os_rate', 'osv', 'pkgname', 'ppi', 'pro2', 'pro2_rate',
        'province', 'reqrealip', 'reqrealip_cate', 'reqrealip_cate_rate',
        'reqrealipnum', 'sid', 'ver', 'w'],
+       
+       carrier_rate  dvctype_rate  ip_cate_rate   ntt_rate    orientation_rate   os_rate   pro2_rate  reqrealip_cate_rate
+'''
+
+'''
+f1 train_score 0.9356451000385325 , f1 test_score 0.9347783771759078  94.16   0.9426083947858783 f1 score
+
 '''

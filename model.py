@@ -144,51 +144,56 @@ def reg_model(model_train, test, train_label, model_type, onehot_features, label
 
 
 def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=True):
-    #特征处理
-
     label = features_map['label']
-    train_y = train[label]
-    category_features = features_map['category_features']
+    label_features = features_map['label_features']
+    category_onehot_features = features_map['category_features1']
+    category_features = features_map['category_features2']
     numerical_features = features_map['numerical_features']
-    onehot_features = features_map['onehot_features']
     combine = pd.concat([train, test], axis=0)
-    combine = multi_column_LabelEncoder(combine, category_features+onehot_features, rename=True)
+    combine = multi_column_LabelEncoder(combine, label_features, rename=True)
     combine.reset_index(inplace=True)
-
     onehoter = OneHotEncoder()
-    X_onehot = onehoter.fit_transform(combine[onehot_features])
+    X_onehot = onehoter.fit_transform(combine[category_onehot_features])
     train_x_onehot = X_onehot.tocsr()[:train.shape[0]].tocsr()
     test_x_onehot = X_onehot.tocsr()[train.shape[0]:].tocsr()
-    train_x_original = combine[numerical_features][:train.shape[0]]
-    test_x_original = combine[numerical_features][train.shape[0]:]
+    train_x_original = combine[numerical_features+category_features][:train.shape[0]]
+    test_x_original = combine[numerical_features+category_features][train.shape[0]:]
     train_x = sparse.hstack((train_x_onehot, train_x_original)).tocsr()
     test_x = sparse.hstack((test_x_onehot, test_x_original)).tocsr()
-
+    train_y = combine[label][:train.shape[0]]
 
     # train_x = combine.loc[:train.shape[0]-1]
     # test_x = combine.loc[train.shape[0]:]
     # train_x[label] = train_x[label].astype(np.int)
-
-    #模型训练
-    clf = lgb.LGBMClassifier(
-        learning_rate=0.05,
-        n_estimators=10000,
-        max_depth=7,
-        num_leaves=63,
-        subsample=0.8,
-        subsample_freq=1,
-        colsample_bytree=0.8,
-        random_state=2019,
-        n_jobs=6
-    )
     # features = category_features + numerical_features
     #
     # train_x = train_x[features].values
     # test_x = test_x[features].values
 
+
+
+    #模型训练
+    clf = lgb.LGBMClassifier(
+        objective='binary',
+        learning_rate=0.2,
+        n_estimators=1000,
+        max_depth=-1,
+        num_leaves=31,
+        subsample=0.8,
+        subsample_freq=1,
+        colsample_bytree=0.8,
+        random_state=2019,
+        reg_alpha=1,
+        reg_lambda=5,
+        n_jobs=6,
+        min_child_samples=20
+    )
+
     if cv:
         n_fold = 5
+        print(train.shape[0])
         result = np.zeros((test.shape[0],class_num))
+        oof = np.zeros((train.shape[0],class_num))
         skf = StratifiedKFold(n_splits=n_fold, shuffle=True, random_state=2019)
         kfold = skf.split(train_x, train_y)
         count_fold = 0
@@ -196,27 +201,24 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
             print("training......fold",count_fold)
             count_fold = count_fold + 1
             k_x_train = train_x[train_index]
-            k_y_train = train_y[train_index]
+            k_y_train = train_y.loc[train_index]
             k_x_vali = train_x[vali_index]
-            k_y_vali = train_y[vali_index]
+            k_y_vali = train_y.loc[vali_index]
 
             clf.fit(k_x_train, k_y_train,eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],early_stopping_rounds=200, verbose=False)
-            val_pred = clf.predict(k_x_vali, num_iteration=clf.best_iteration_)
-            test_pred = clf.predict(test_x, num_iteration=clf.best_iteration_)
             test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
+            val_pred_proba = clf.predict_proba(k_x_vali, num_iteration=clf.best_iteration_)
             result = result + test_pred_proba
+            oof[vali_index] = val_pred_proba
         result = result/n_fold
     else:
         print(train_x.shape, train_y.shape)
         clf.fit(train_x, train_y)
-        test_pred = clf.predict(test_x)
+        #test_pred = clf.predict(test_x)
         test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
-
+        train_pred_proba = clf.predict_proba(train_x, num_iteration=clf.best_iteration_)
         result = test_pred_proba
-        # featureImportances = clf.feature_importances_
-        # print(featureImportances)
-        # for f,fi in zip(features,list(featureImportances)):
-        #     print(f,fi)
+        oof = train_pred_proba
 
-    return result
+    return oof,result
 

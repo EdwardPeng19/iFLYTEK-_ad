@@ -5,6 +5,7 @@ import requests
 import json
 import sys
 import datetime
+import pickle
 DATA = './data/'
 MODEL = './model/'
 
@@ -16,7 +17,6 @@ with open(DATA + 'CN_ips.txt') as ipfile:
         a = re.sub(' +', ' ', l.rstrip('\n'))
         ip_database.append(a.split(' ',3))
 ip_database = pd.DataFrame(ip_database, columns=['ips','ipe','add','com'])
-print(ip_database.shape)
 ip_database.to_csv(DATA+'cn_ips.csv', encoding='utf-8', index=False)
 
 def time_format(data):
@@ -66,14 +66,14 @@ def ip_network(ip, ip_cate):
 def device_blacklist_pro(df_train, df_test):
     wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5']
     for wbl in wblist:
-        bl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 1)].groupby(wbl).size().reset_index(
-            name=wbl + 'bl')
-        wl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 0)].groupby(wbl).size().reset_index(
-            name=wbl + 'wl')
+        bl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 1)].groupby(wbl).size().reset_index(name=wbl + 'bl')
+        wl = df_train[(df_train[wbl] != 'empty') & (df_train['label'] == 0)].groupby(wbl).size().reset_index(name=wbl + 'wl')
         df_test = df_test.merge(bl, how='left', on=wbl)
         df_test = df_test.merge(wl, how='left', on=wbl)
         df_test[wbl + 'bl'] = df_test[wbl + 'bl'].fillna(0)
         df_test[wbl + 'wl'] = df_test[wbl + 'wl'].fillna(0)
+        df_test[wbl + 'bl'] = df_test.apply(lambda x: 1 if x[wbl + 'bl'] > 0 else 0, axis=1)
+        df_test[wbl + 'wl'] = df_test.apply(lambda x: 1 if x[wbl + 'wl'] > 0 else 0, axis=1)
     return df_test
 def device_blacklist(train, test):
     train_pro = train[train['nginxtime_date'] == '2019-06-03']
@@ -99,9 +99,10 @@ def black_rate_pro(df_train, df_test):
                 'dvctype','ntt','carrier','os','orientation',]
     for fr in features:
         sta_df = df_train.groupby(fr).agg({'label': 'sum', 'sid': 'count'}).reset_index()
-        sta_df[fr+'_rate'] = sta_df['label'] / sta_df['sid']
+        sta_df[fr+'_rate'] = (sta_df['label']+48) / (sta_df['sid']+100)
         df_test = df_test.merge(sta_df[[fr, fr+'_rate']], how='left', on=fr)
-        df_test[fr+'_rate'] = df_test[fr+'_rate'].fillna(0.0)
+        ctr = np.sum(df_train['label']) / df_train.shape[0]
+        df_test[fr+'_rate'] = df_test[fr+'_rate'].fillna(ctr)
     print(df_train.shape, df_test.shape)
     return df_test
 def black_rate(train, test):
@@ -127,9 +128,48 @@ def ip2decimalism(ip):
         return dec_value
     except:
         return -1
+
+#对长尾的截取
+
+def _cut(df_value, df_counts, count_list):
+    for _c in count_list:
+        if df_counts<=_c:
+            return str(_c)+'_counts'
+    return str(df_value)
+def feature_cut(train, test):
+    features_cutmap = {
+        'pkgname':[1,2,3],
+        'adunitshowid':[2,5,13],
+        'mediashowid':[4,12],
+        'ver':[1,2],
+        'lan':[1,2],
+        'make':[1],
+        'model':[1,2],
+        'osv':[1,2]
+    }
+    for ft in features_cutmap:
+        df_counts = pd.DataFrame(train[ft].value_counts())
+        df_counts.columns = [ft+'_counts']
+        df_counts[ft] = df_counts.index
+        train = train.merge(df_counts, on=ft, how='left')
+        train[ft] = train.apply(lambda x: _cut(x[ft], x[ft+'_counts'], features_cutmap[ft]), axis=1)
+        test = test.merge(df_counts, on=ft, how='left')
+        test[ft+'_counts'] = test[ft+'_counts'].fillna(0)
+        test[ft] = test.apply(lambda x: _cut(x[ft], x[ft + '_counts'], features_cutmap[ft]), axis=1)
+        train.drop(columns=[ft+'_counts'],inplace=True)
+        test.drop(columns=[ft + '_counts'], inplace=True)
+    return train, test
+
 def model_input():
     train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
     test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
+    fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
+    print('null fill......')
+    for ff in fillna_features:
+        train[ff] = train[ff].fillna('null')
+        test[ff] = test[ff].fillna('null')
+    print('feature cut......')
+    train, test = feature_cut(train, test)
 
     train = time_format(train) # 2019-06-03 2019-06-09
     test = time_format(test) # 2019-06-10
@@ -137,10 +177,13 @@ def model_input():
     train = md5_format(train)
     test = md5_format(test)
 
+
     city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
     city_pro.columns = ['pro2', 'city']
     train = train.merge(city_pro, how='left', on='city')
     test = test.merge(city_pro, how='left', on='city')
+    train['pro2'] = train['pro2'].fillna('null')
+    test['pro2'] = test['pro2'].fillna('null')
 
     train['ipnum'] = train.apply(lambda x: ip2decimalism(x['ip']), axis=1)
     test['ipnum'] = test.apply(lambda x: ip2decimalism(x['ip']), axis=1)
@@ -164,8 +207,13 @@ def model_input():
 
     print(train.columns)
     print(test.columns)
-    train.to_csv(MODEL + 'train.csv', encoding='utf-8', index=False)
-    test.to_csv(MODEL + 'test.csv', encoding='utf-8', index=False)
+    print(train.info())
+    with open(MODEL + 'train.pk', 'wb') as train_f:
+        pickle.dump(train, train_f)
+    with open(MODEL + 'test.pk', 'wb') as test_f:
+        pickle.dump(test, test_f)
+    # train.to_csv(MODEL + 'train.csv', encoding='utf-8', index=False)
+    # test.to_csv(MODEL + 'test.csv', encoding='utf-8', index=False)
 
 if __name__ == "__main__":
     model_input()
