@@ -13,6 +13,7 @@ def cut_hour(x):
     else:
         return 3
 if __name__ == "__main__":
+    #model_input()
     # train = pd.read_csv(MODEL + 'train.csv', encoding='utf-8')
     # test = pd.read_csv(MODEL + 'test.csv', encoding='utf-8')
     with open(MODEL + 'train.pk', 'rb') as train_f:
@@ -33,19 +34,23 @@ if __name__ == "__main__":
         model_test = test
 
     label = 'label'
-    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate',
-                          'openudidmd5_rate', 'macmd5_rate',]
+    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate','openudidmd5_rate', 'macmd5_rate', 'ip_net_rate']
     wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl',]
-    label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2']
+    active_features = [ 'adidmd5_active', 'adidmd5_counts', 'idfamd5_active', 'idfamd5_counts',
+                       'imeimd5_active', 'imeimd5_counts', ]
+    only_features = ['adidmd5ip_counts', 'adidmd5idfamd5_counts', 'adidmd5openudidmd5_counts', 'adidmd5macmd5_counts',
+                     'adidmd5imeimd5_counts']
+    label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2',
+                      ]
 
     category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model',
                                 'nginxtime_hour',
                                 ]
-    category_nullone_features = ['apptype', 'dvctype',   'ip_cate',  'ntt',  'carrier', 'orientation', 'province']
+    category_nullone_features = ['apptype', 'dvctype',   'ip_cate',  'ntt',  'carrier', 'orientation', 'province',  ]
     numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
 
 
-                          ] + rate_features + wl_features
+                          ] + rate_features + wl_features + active_features + only_features
     #
     features = {
         'label_features':label_features,
@@ -54,7 +59,7 @@ if __name__ == "__main__":
         'numerical_features':numerical_features,
         'label':'label'
     }
-    model_type='lgb'
+    model_type='xgb'
     t1 = time.time()
     train_pre_proba,test_pre_proba = class_model(model_train, model_test, features, model_type,class_num=2,cv=True)
 
@@ -71,8 +76,8 @@ if __name__ == "__main__":
         model_test['label'] = model_test.apply(lambda x: 1 if x['pre_proba']>0.5 else 0, axis=1)
         model_test[['sid','label']].to_csv('submit/submission.csv', index=False, encoding='utf-8')
 
-        model_train[['sid', 'pre_proba']].to_csv(MODEL + 'train_track.csv', index=False, encoding='utf-8')
-        model_test[['sid', 'pre_proba']].to_csv(MODEL + 'test_track.csv', index=False, encoding='utf-8')
+        model_train[['sid', 'pre_proba']].to_csv(MODEL + f'train_track_{model_type}.csv', index=False, encoding='utf-8')
+        model_test[['sid', 'pre_proba']].to_csv(MODEL + f'test_track_{model_type}.csv', index=False, encoding='utf-8')
         print(f'{train_f1} f1 score')
 
 '''
@@ -98,4 +103,5 @@ Index(['adidmd5', 'adidmd5_0', 'adidmd5_rate', 'adidmd5bl', 'adidmd5wl',
 '''
 f1 train_score 0.9356451000385325 , f1 test_score 0.9347783771759078  94.16   0.9426083947858783 f1 score
 
+train use times 2054.5476400852203  0.9426690926218865 f1 score  94.17
 '''

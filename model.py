@@ -11,6 +11,7 @@ from sklearn.preprocessing import Imputer
 from scipy import sparse
 from scipy.sparse import csr_matrix
 import lightgbm as lgb
+import xgboost as xgb
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 lgb_params = {
@@ -175,20 +176,26 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
     #模型训练
     clf = lgb.LGBMClassifier(
         objective='binary',
-        learning_rate=0.2,
-        n_estimators=1000,
+        learning_rate=0.05,
+        n_estimators=5000,
         max_depth=-1,
-        num_leaves=31,
+        num_leaves=63,
         subsample=0.8,
         subsample_freq=1,
         colsample_bytree=0.8,
         random_state=2019,
         reg_alpha=1,
         reg_lambda=5,
-        n_jobs=6,
-        min_child_samples=20
+        n_jobs=6
     )
-
+    cxgb = xgb.XGBClassifier(
+        max_depth=5,
+        learning_rate=0.01,
+        n_estimators=5000,
+        subsample=0.8,
+        random_state=2019,
+        n_jobs=-1
+    )
     if cv:
         n_fold = 5
         print(train.shape[0])
@@ -204,10 +211,14 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
             k_y_train = train_y.loc[train_index]
             k_x_vali = train_x[vali_index]
             k_y_vali = train_y.loc[vali_index]
-
-            clf.fit(k_x_train, k_y_train,eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],early_stopping_rounds=200, verbose=False)
-            test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
-            val_pred_proba = clf.predict_proba(k_x_vali, num_iteration=clf.best_iteration_)
+            if model_type == 'lgb':
+                clf.fit(k_x_train, k_y_train,eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],early_stopping_rounds=200, verbose=False)
+                test_pred_proba = clf.predict_proba(test_x, num_iteration=clf.best_iteration_)
+                val_pred_proba = clf.predict_proba(k_x_vali, num_iteration=clf.best_iteration_)
+            elif model_type == 'xgb':
+                cxgb.fit(k_x_train, k_y_train,eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],early_stopping_rounds=200, verbose=False)
+                test_pred_proba = cxgb.predict_proba(test_x)
+                val_pred_proba = cxgb.predict_proba(k_x_vali)
             result = result + test_pred_proba
             oof[vali_index] = val_pred_proba
         result = result/n_fold
