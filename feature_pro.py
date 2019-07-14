@@ -99,7 +99,7 @@ def black_rate_pro(df_train, df_test):
                 'dvctype','ntt','carrier','os','orientation', 'ip_net', 'reqrealip_net']
     for fr in features:
         sta_df = df_train.groupby(fr).agg({'label': 'sum', 'sid': 'count'}).reset_index()
-        sta_df[fr+'_rate'] = (sta_df['label']+48) / (sta_df['sid']+100) #有效果
+        sta_df[fr+'_rate'] = (sta_df['label']+958) / (sta_df['sid']+1026+958) #有效果
         df_test = df_test.merge(sta_df[[fr, fr+'_rate']], how='left', on=fr)
         ctr = np.sum(df_train['label']) / df_train.shape[0]
         df_test[fr+'_rate'] = df_test[fr+'_rate'].fillna(ctr)
@@ -137,14 +137,15 @@ def _cut(df_value, df_counts, count_list):
     return str(df_value)
 def feature_cut(train, test):
     features_cutmap = {
-        'pkgname':[1,2,3],
+        'pkgname':[20,40,100],
         'adunitshowid':[2,5,13],
         'mediashowid':[4,12],
-        'ver':[1,2],
-        'lan':[1,2],
-        'make':[1],
-        'model':[1,2],
-        'osv':[1,2]
+        'ver':[5,10,20,50,100],
+        'lan':[10,20],
+        'make':[1,5,10],
+        'model':[1,2,5,10],
+        'osv':[1,2],
+
     }
     for ft in features_cutmap:
         df_counts = pd.DataFrame(train[ft].value_counts())
@@ -181,62 +182,64 @@ def device_log(train, test):
 
 def device_only(x):
     return len(list(set(list(x))))
+
+
 def model_input():
-    # train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
-    # test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
-    # fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
-    # print('null fill......')
-    # for ff in fillna_features:
-    #     train[ff] = train[ff].fillna('null')
-    #     test[ff] = test[ff].fillna('null')
-    # print('feature cut......')
-    # train, test = feature_cut(train, test)
-    #
-    # train = time_format(train) # 2019-06-03 2019-06-09
-    # test = time_format(test) # 2019-06-10
-    #
-    # train = md5_format(train)
-    # test = md5_format(test)
-    #
-    #
-    # city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
-    # city_pro.columns = ['pro2', 'city']
-    # train = train.merge(city_pro, how='left', on='city')
-    # test = test.merge(city_pro, how='left', on='city')
-    # train['pro2'] = train['pro2'].fillna('null')
-    # test['pro2'] = test['pro2'].fillna('null')
-    #
-    # train['ipnum'] = train.apply(lambda x: ip2decimalism(x['ip']), axis=1)
-    # test['ipnum'] = test.apply(lambda x: ip2decimalism(x['ip']), axis=1)
-    # train['reqrealipnum'] = train.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
-    # test['reqrealipnum'] = test.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
-    #
-    # train['ip_cate'] = train.apply(lambda x: ip_cate(x['ip']), axis=1)
-    # test['ip_cate'] = test.apply(lambda x: ip_cate(x['ip']), axis=1)
-    # train['reqrealip_cate'] = train.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
-    # test['reqrealip_cate'] = test.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
-    # train['ip_net'] = train.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
-    # test['ip_net'] = test.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
-    # train['reqrealip_net'] = train.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
-    # test['reqrealip_net'] = test.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
-    #
-    #
-    # train['hw'] = train['h']*train['w']
-    # test['hw'] = test['h']*test['w']
-    # #设备黑白名单处理
-    # train, test = device_blacklist(train, test)
-    #
-    # #黑名单率统计
-    # train, test = black_rate(train, test)
-    #
-    # #设备登录密度
-    # train, test = device_log(train, test)
+    train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
+    test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
+    fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
+    print('null fill......')
+    for ff in fillna_features:
+        train[ff] = train[ff].fillna('null')
+        test[ff] = test[ff].fillna('null')
+    print('feature cut......')
+    train, test = feature_cut(train, test)
+
+    train = time_format(train) # 2019-06-03 2019-06-09
+    test = time_format(test) # 2019-06-10
+
+    train = md5_format(train)
+    test = md5_format(test)
+
+
+    city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
+    city_pro.columns = ['pro2', 'city']
+    train = train.merge(city_pro, how='left', on='city')
+    test = test.merge(city_pro, how='left', on='city')
+    train['pro2'] = train['pro2'].fillna('null')
+    test['pro2'] = test['pro2'].fillna('null')
+
+    train['ipnum'] = train.apply(lambda x: ip2decimalism(x['ip']), axis=1)
+    test['ipnum'] = test.apply(lambda x: ip2decimalism(x['ip']), axis=1)
+    train['reqrealipnum'] = train.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
+    test['reqrealipnum'] = test.apply(lambda x: ip2decimalism(x['reqrealip']), axis=1)
+
+    train['ip_cate'] = train.apply(lambda x: ip_cate(x['ip']), axis=1)
+    test['ip_cate'] = test.apply(lambda x: ip_cate(x['ip']), axis=1)
+    train['reqrealip_cate'] = train.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    test['reqrealip_cate'] = test.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    train['ip_net'] = train.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+    test['ip_net'] = test.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+    train['reqrealip_net'] = train.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
+    test['reqrealip_net'] = test.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
+
+
+    train['hw'] = train['h']*train['w']
+    test['hw'] = test['h']*test['w']
+    #设备黑白名单处理
+    train, test = device_blacklist(train, test)
+
+    #黑名单率统计
+    train, test = black_rate(train, test)
+
+    #设备登录密度
+    train, test = device_log(train, test)
 
     #设备唯一性
-    with open(MODEL + 'train.pk', 'rb') as train_f:
-        train = pickle.load(train_f)
-    with open(MODEL + 'test.pk', 'rb') as test_f:
-        test = pickle.load(test_f)
+    # with open(MODEL + 'train.pk', 'rb') as train_f:
+    #     train = pickle.load(train_f)
+    # with open(MODEL + 'test.pk', 'rb') as test_f:
+    #     test = pickle.load(test_f)
     combine = pd.concat([train, test], axis=0)
     for f1,f2 in zip(['adidmd5', 'adidmd5', 'adidmd5', 'adidmd5', 'adidmd5'],['ip', 'idfamd5', 'openudidmd5', 'macmd5', 'imeimd5']):
         f1_f2 = combine[combine[f1]!='empty'].groupby(f1).agg({f2:device_only}).reset_index()

@@ -34,23 +34,17 @@ if __name__ == "__main__":
         model_test = test
 
     label = 'label'
-    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate','openudidmd5_rate', 'macmd5_rate', 'ip_net_rate']
+    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate','openudidmd5_rate', 'macmd5_rate', 'ip_net_rate', 'ip_cate_rate']
     wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl',]
-    active_features = [ 'adidmd5_active', 'adidmd5_counts', 'idfamd5_active', 'idfamd5_counts',
-                       'imeimd5_active', 'imeimd5_counts', ]
-    only_features = ['adidmd5ip_counts', 'adidmd5idfamd5_counts', 'adidmd5openudidmd5_counts', 'adidmd5macmd5_counts',
-                     'adidmd5imeimd5_counts']
-    label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2',
-                      ]
-
-    category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model',
-                                'nginxtime_hour',
-                                ]
-    category_nullone_features = ['apptype', 'dvctype',   'ip_cate',  'ntt',  'carrier', 'orientation', 'province',  ]
+    active_features = [ 'adidmd5_active', 'adidmd5_counts', 'idfamd5_active', 'idfamd5_counts', 'imeimd5_active', 'imeimd5_counts', 'macmd5_active', 'openudidmd5_active']
+    only_features = ['adidmd5ip_counts', 'adidmd5idfamd5_counts', 'adidmd5openudidmd5_counts', 'adidmd5macmd5_counts','adidmd5imeimd5_counts']
+    label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2', 'ip_cate', 'ntt', 'carrier', 'orientation', 'province','apptype',]
+    category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model','nginxtime_hour','ip_cate',  'ntt',  'carrier', 'orientation','apptype',]
+    category_nullone_features = []
     numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
 
 
-                          ] + rate_features + wl_features + active_features + only_features
+                          ] + wl_features
     #
     features = {
         'label_features':label_features,
@@ -59,7 +53,7 @@ if __name__ == "__main__":
         'numerical_features':numerical_features,
         'label':'label'
     }
-    model_type='xgb'
+    model_type='lgb'
     t1 = time.time()
     train_pre_proba,test_pre_proba = class_model(model_train, model_test, features, model_type,class_num=2,cv=True)
 
@@ -81,27 +75,16 @@ if __name__ == "__main__":
         print(f'{train_f1} f1 score')
 
 '''
-Index(['adidmd5', 'adidmd5_0', 'adidmd5_rate', 'adidmd5bl', 'adidmd5wl',
-       'adunitshowid', 'adunitshowid_rate', 'apptype', 'apptype_rate',
-       'carrier', 'carrier_rate', 'city', 'city_rate', 'dvctype',
-       'dvctype_rate', 'h', 'hw', 'idfamd5', 'idfamd5_0', 'idfamd5_rate',
-       'idfamd5bl', 'idfamd5wl', 'imeimd5', 'imeimd5_0', 'imeimd5_rate',
-       'imeimd5bl', 'imeimd5wl', 'ip', 'ip_cate', 'ip_cate_rate', 'ip_net',
-       'ipnum', 'label', 'lan', 'macmd5', 'macmd5_0', 'macmd5_rate',
-       'macmd5bl', 'macmd5wl', 'make', 'mediashowid', 'mediashowid_rate',
-       'model', 'nginxtime', 'nginxtime_date', 'nginxtime_format',
-       'nginxtime_hour', 'nginxtime_rate', 'nginxtime_time', 'nginxtime_week',
-       'ntt', 'ntt_rate', 'openudidmd5', 'openudidmd5_0', 'openudidmd5_rate',
-       'openudidmd5bl', 'openudidmd5wl', 'orientation', 'orientation_rate',
-       'os', 'os_rate', 'osv', 'pkgname', 'ppi', 'pro2', 'pro2_rate',
-       'province', 'reqrealip', 'reqrealip_cate', 'reqrealip_cate_rate',
-       'reqrealipnum', 'sid', 'ver', 'w'],
-       
-       carrier_rate  dvctype_rate  ip_cate_rate   ntt_rate    orientation_rate   os_rate   pro2_rate  reqrealip_cate_rate
-'''
+train use times 2054.5476400852203  0.9426690926218865 f1 score  94.17  f1 train_score 0.9358662301138023 , f1 test_score 0.9342464228049663
 
-'''
-f1 train_score 0.9356451000385325 , f1 test_score 0.9347783771759078  94.16   0.9426083947858783 f1 score
+f1 train_score 0.9359606048381487 , f1 test_score 0.9345146057085545
 
-train use times 2054.5476400852203  0.9426690926218865 f1 score  94.17
+train use times 1867.8405408859253
+0.9426759425727612 f1 score
+
+f1 train_score 0.9534761528795579 , f1 test_score 0.933866703770697
+f1 train_score 0.9535149110065537 , f1 test_score 0.9338946077235631
+f1 train_score 0.9473621274838466 , f1 test_score 0.9341076675722126
+f1 train_score 0.9480535374550796 , f1 test_score 0.9351981481224789
+f1 train_score 0.9358935120004898 , f1 test_score 0.9355122756172476   0.9408054251434533 f1 score   94.2218
 '''
