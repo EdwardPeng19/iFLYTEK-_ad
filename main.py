@@ -24,6 +24,9 @@ if __name__ == "__main__":
     test['nginxtime_hour'] = test['nginxtime_hour'].astype(float)
     train['nginxtime_hour'] = train.apply(lambda  x: cut_hour(x['nginxtime_hour']), axis=1)
     test['nginxtime_hour'] = test.apply(lambda x: cut_hour(x['nginxtime_hour']), axis=1)
+
+    train['deviceid_sum'] = train['adidmd5_0'] + train['imeimd5_0'] + train['idfamd5_0'] + train['openudidmd5_0'] + train['macmd5_0']
+    test['deviceid_sum'] = test['adidmd5_0'] + test['imeimd5_0'] + test['idfamd5_0'] + test['openudidmd5_0'] + test['macmd5_0']
     #特征处理
     offline = False
     if offline:
@@ -34,18 +37,21 @@ if __name__ == "__main__":
         model_test = test
 
     label = 'label'
-    rate_features = [ 'adidmd5_rate', 'imeimd5_rate', 'idfamd5_rate','openudidmd5_rate', 'macmd5_rate', 'ip_net_rate', 'ip_cate_rate']
+    rate_features = ['lan_rate_offline','os_rate_offline','osv_rate_offline', 'pkgname_rate_offline', 'adunitshowid_rate_offline', 'mediashowid_rate_offline',
+                     'ver_rate_offline', 'make_rate_offline', 'model_rate_offline',  'ntt_rate_offline', 'orientation_rate_offline',
+                     'apptype_rate_offline']
+    rate_features = [i.replace('_offline','') for i in rate_features]
     wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl',]
-    active_features = [ 'adidmd5_active', 'adidmd5_counts', 'idfamd5_active', 'idfamd5_counts', 'imeimd5_active', 'imeimd5_counts', 'macmd5_active', 'openudidmd5_active']
-    only_features = ['adidmd5ip_counts', 'adidmd5idfamd5_counts', 'adidmd5openudidmd5_counts', 'adidmd5macmd5_counts','adidmd5imeimd5_counts']
+    active_features = [ 'adidmd5_active', 'idfamd5_active', 'imeimd5_active', 'macmd5_active', 'openudidmd5_active']
     label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2', 'ip_cate', 'ntt', 'carrier', 'orientation', 'province','apptype',]
-    category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model','nginxtime_hour','ip_cate',  'ntt',  'carrier', 'orientation','apptype',]
+    only_features = []
+    for de in ['adidmd5', 'imeimd5', 'macmd5', 'openudidmd5', 'idfamd5']:
+        for el in ['model', 'city', 'ip', 'reqrealip', 'ip_net', 'make', 'pkgname']:
+            only_features.append(f'{de}_{el}_nq')
+    category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model','nginxtime_hour','ip_cate',  'ntt',  'carrier', 'orientation','apptype','dpi']
     category_nullone_features = []
-    numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0',
+    numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0', ] + wl_features + only_features + rate_features
 
-
-                          ] + wl_features
-    #
     features = {
         'label_features':label_features,
         'category_features1':category_onehot_features,
@@ -76,15 +82,9 @@ if __name__ == "__main__":
 
 '''
 train use times 2054.5476400852203  0.9426690926218865 f1 score  94.17  f1 train_score 0.9358662301138023 , f1 test_score 0.9342464228049663
-
-f1 train_score 0.9359606048381487 , f1 test_score 0.9345146057085545
-
-train use times 1867.8405408859253
-0.9426759425727612 f1 score
-
-f1 train_score 0.9534761528795579 , f1 test_score 0.933866703770697
-f1 train_score 0.9535149110065537 , f1 test_score 0.9338946077235631
-f1 train_score 0.9473621274838466 , f1 test_score 0.9341076675722126
-f1 train_score 0.9480535374550796 , f1 test_score 0.9351981481224789
+f1 train_score 0.9480535374550796 , f1 test_score 0.9351981481224789  不带cv
 f1 train_score 0.9358935120004898 , f1 test_score 0.9355122756172476   0.9408054251434533 f1 score   94.2218
+
+f1 train_score 0.9485662798361463 , f1 test_score 0.9353841461724014 f1 train_score 0.9361220918749149 , f1 test_score 0.9355337516901847
+f1 train_score 0.9370394692905323 , f1 test_score 0.9368188093602791  train use times 1988.2866513729095 0.9419362781666593 f1 score  
 '''

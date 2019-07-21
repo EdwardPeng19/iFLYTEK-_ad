@@ -191,10 +191,10 @@ def class_model(train, test, features_map, model_type='lgb', class_num=2, cv=Tru
     cxgb = xgb.XGBClassifier(
         max_depth=5,
         learning_rate=0.01,
-        n_estimators=100,
+        n_estimators=1000,
         subsample=0.8,
         random_state=2019,
-        n_jobs=-1
+        n_jobs=6
     )
     if cv:
         n_fold = 5
