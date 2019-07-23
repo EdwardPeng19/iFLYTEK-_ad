@@ -16,10 +16,8 @@ if __name__ == "__main__":
     #model_input()
     # train = pd.read_csv(MODEL + 'train.csv', encoding='utf-8')
     # test = pd.read_csv(MODEL + 'test.csv', encoding='utf-8')
-    with open(MODEL + 'train.pk', 'rb') as train_f:
-        train = pickle.load(train_f)
-    with open(MODEL + 'test.pk', 'rb') as test_f:
-        test = pickle.load(test_f)
+    train = pd.read_pickle(MODEL + 'train.pk')
+    test = pd.read_pickle(MODEL + 'test.pk')
     train['nginxtime_hour'] = train['nginxtime_hour'].astype(float)
     test['nginxtime_hour'] = test['nginxtime_hour'].astype(float)
     train['nginxtime_hour'] = train.apply(lambda  x: cut_hour(x['nginxtime_hour']), axis=1)
@@ -41,16 +39,17 @@ if __name__ == "__main__":
                      'ver_rate_offline', 'make_rate_offline', 'model_rate_offline',  'ntt_rate_offline', 'orientation_rate_offline',
                      'apptype_rate_offline']
     rate_features = [i.replace('_offline','') for i in rate_features]
-    wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl',]
-    active_features = [ 'adidmd5_active', 'idfamd5_active', 'imeimd5_active', 'macmd5_active', 'openudidmd5_active']
+    wl_features = ['adidmd5bl', 'adidmd5wl',  'idfamd5bl', 'idfamd5wl',   'openudidmd5bl', 'openudidmd5wl',   'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl', 'udidwl', 'udidbl']
+    active_features = [ 'adidmd5_counts', 'idfamd5_counts', 'imeimd5_counts', 'macmd5_counts', 'openudidmd5_counts']
     label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2', 'ip_cate', 'ntt', 'carrier', 'orientation', 'province','apptype',]
     only_features = []
     for de in ['adidmd5', 'imeimd5', 'macmd5', 'openudidmd5', 'idfamd5']:
-        for el in ['model', 'city', 'ip', 'reqrealip', 'ip_net', 'make', 'pkgname']:
+        for el in ['model', 'city', 'ip', 'make', 'pkgname', 'adunitshowid', 'mediashowid', 'apptype']:
             only_features.append(f'{de}_{el}_nq')
     category_onehot_features = ['city','lan','os','osv','pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver', 'make', 'model','nginxtime_hour','ip_cate',  'ntt',  'carrier', 'orientation','apptype','dpi']
     category_nullone_features = []
-    numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0', ] + wl_features + only_features + rate_features
+    numerical_features = ['h','w','ppi','hw','adidmd5_0','imeimd5_0','idfamd5_0','openudidmd5_0','macmd5_0', ] \
+                         + wl_features + only_features + rate_features
 
     features = {
         'label_features':label_features,
@@ -87,4 +86,8 @@ f1 train_score 0.9358935120004898 , f1 test_score 0.9355122756172476   0.9408054
 
 f1 train_score 0.9485662798361463 , f1 test_score 0.9353841461724014 f1 train_score 0.9361220918749149 , f1 test_score 0.9355337516901847
 f1 train_score 0.9370394692905323 , f1 test_score 0.9368188093602791  train use times 1988.2866513729095 0.9419362781666593 f1 score  
+
+f1 train_score 0.9534259753547756 , f1 test_score 0.9362315626039703
+
+f1 train_score 0.9534117843315794 , f1 test_score 0.936487254480684
 '''

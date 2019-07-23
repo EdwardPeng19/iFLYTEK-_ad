@@ -121,8 +121,13 @@ def device_blacklist_pro(df_train, df_test):
         df_test[wbl + 'wl'] = df_test.apply(lambda x: 1 if x[wbl + 'wl'] > 0 else 0, axis=1)
     return df_test
 def device_blacklist(train, test):
+    print(train.columns)
+    drop_list = [i for i in train.columns if 'bl' in i or 'wl' in i]
+    train.drop(columns=drop_list, inplace=True)
+    test.drop(columns=drop_list, inplace=True)
+    print(train.columns)
     train_pro = train[train['nginxtime_date'] == '2019-06-03']
-    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5', 'ip_net', 'reqrealip_net', 'ip', 'reqrealip']
+    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5', 'ip_net', 'reqrealip_net', 'ip', 'reqrealip', 'udid']
     for wbl in wblist:
         train_pro[wbl + 'bl'] = train_pro['label']
         train_pro[wbl + 'wl'] = train_pro['label']
@@ -174,7 +179,6 @@ def ip2decimalism(ip):
         return -1
 
 #对长尾的截取
-
 def _cut(df_value, df_counts, count_list):
     for _c in count_list:
         if df_counts<=_c:
@@ -275,123 +279,30 @@ def feature_concat(train, test):
             #test[f'{f1}_{f2}_only'] = test[f'{f1}_{f2}_only'].fillna(f1_f2[f'{f1}_{f2}_only'].mean())
     return train_pro, test
 
-def unique_count(index_col, feature, df_data, sub):
+def unique_count(index_col, feature, df_data, sub, wtype):
     if isinstance(index_col, list):
         name = "{0}_{1}_nq".format('_'.join(index_col), feature)
     else:
         name = "{0}_{1}_nq".format(index_col, feature)
     print(name+' unique......')
+    if wtype == 'ignore' and name in df_data.columns:
+        return df_data, sub
+
+    if name in df_data.columns:
+        df_data.drop(columns=[name], inplace=True)
     gp1 = df_data.groupby(index_col)[feature].nunique().reset_index().rename(
         columns={feature: name})
-    df_data = pd.merge(df_data, gp1, how='left', on=[index_col])
-    sub = pd.merge(sub, gp1, how='left', on=[index_col])
+    df_data = pd.merge(df_data, gp1, how='left', on=index_col)
+
+    if 'nginxtime_date' in name:
+        gp2 = sub.groupby(index_col)[feature].nunique().reset_index().rename(columns={feature: name})
+        sub = pd.merge(sub, gp2, how='left', on=index_col)
+    else:
+        sub = pd.merge(sub, gp1, how='left', on=index_col)
     return df_data.fillna(0), sub.fillna(0)
 
-def model_input():
-    train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
-    test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
-    # #处理orientation异常值
-    # train.orientation[(train.orientation == 90) | (train.orientation == 2)] = 0
-    # test.orientation[(test.orientation == 90) | (test.orientation == 2)] = 0
-    # #carrier为-1就是未知0
-    # train.carrier[train.carrier == -1] = 0
-    # test.carrier[test.carrier == -1] = 0
-    # #ntt 网络类型 0-未知, 1-有线网, 2-WIFI, 3-蜂窝网络未知, 4-2G, 5-3G, 6–4G
-    # train.ntt[(train.ntt <= 0) | (train.ntt > 6)] = 0
-    # train.ntt[(train.ntt <= 2) | (train.ntt >= 1)] = 1
-    # test.ntt[(test.ntt <= 0) | (test.ntt > 6)] = 0
-    # test.ntt[(test.ntt <= 2) | (test.ntt >= 1)] = 1
 
-    fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
-    print('null fill......')
-    for ff in fillna_features:
-        train[ff] = train[ff].fillna('null')
-        test[ff] = test[ff].fillna('null')
-    print('feature cut......')
-    train, test = feature_cut(train, test)
-    train = time_format(train) # 2019-06-03 2019-06-09
-    test = time_format(test) # 2019-06-10
-    train = md5_format(train)
-    test = md5_format(test)
-
-
-    city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
-    city_pro.columns = ['pro2', 'city']
-    train = train.merge(city_pro, how='left', on='city')
-    test = test.merge(city_pro, how='left', on='city')
-    train['pro2'] = train['pro2'].fillna('null')
-    test['pro2'] = test['pro2'].fillna('null')
-    train['ip_cate'] = train.apply(lambda x: ip_cate(x['ip']), axis=1)
-    test['ip_cate'] = test.apply(lambda x: ip_cate(x['ip']), axis=1)
-    train['reqrealip_cate'] = train.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
-    test['reqrealip_cate'] = test.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
-    train['ip_net'] = train.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
-    test['ip_net'] = test.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
-    train['reqrealip_net'] = train.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
-    test['reqrealip_net'] = test.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
-
-
-    train['hw'] = train['h']*train['w']
-    test['hw'] = test['h']*test['w']
-    train['dpi'] = train['h'].astype('str') + '_' + train['w'].astype('str')
-    test['dpi'] = test['h'].astype('str') + '_' + test['w'].astype('str')
-    #设备黑白名单处理
-    train, test = device_blacklist(train, test)
-
-    #黑名单率统计
-    train, test = black_rate(train, test)
-
-    #设备登录密度
-    train, test = device_log(train, test)
-
-    #设备 机型唯一性
-    train, test = unique_count('adidmd5', 'model', train, test)
-    train, test = unique_count('imeimd5', 'model', train, test)
-    train, test = unique_count('macmd5', 'model', train, test)
-    train, test = unique_count('openudidmd5', 'model', train, test)
-    train, test = unique_count('idfamd5', 'model', train, test)
-    # 设备 城市唯一性
-    train, test = unique_count('adidmd5', 'city', train, test)
-    train, test = unique_count('imeimd5', 'city', train, test)
-    train, test = unique_count('macmd5', 'city', train, test)
-    train, test = unique_count('openudidmd5', 'city', train, test)
-    train, test = unique_count('idfamd5', 'city', train, test)
-    # 设备 ip唯一性
-    train, test = unique_count('adidmd5', 'ip', train, test)
-    train, test = unique_count('imeimd5', 'ip', train, test)
-    train, test = unique_count('macmd5', 'ip', train, test)
-    train, test = unique_count('openudidmd5', 'ip', train, test)
-    train, test = unique_count('idfamd5', 'ip', train, test)
-    train, test = unique_count('adidmd5', 'reqrealip', train, test)
-    train, test = unique_count('imeimd5', 'reqrealip', train, test)
-    train, test = unique_count('macmd5', 'reqrealip', train, test)
-    train, test = unique_count('openudidmd5', 'reqrealip', train, test)
-    train, test = unique_count('idfamd5', 'reqrealip', train, test)
-
-    train, test = unique_count('adidmd5', 'ip_net', train, test)
-    train, test = unique_count('imeimd5', 'ip_net', train, test)
-    train, test = unique_count('macmd5', 'ip_net', train, test)
-    train, test = unique_count('openudidmd5', 'ip_net', train, test)
-    train, test = unique_count('idfamd5', 'ip_net', train, test)
-
-    train, test = unique_count('adidmd5', 'make', train, test)
-    train, test = unique_count('imeimd5', 'make', train, test)
-    train, test = unique_count('macmd5', 'make', train, test)
-    train, test = unique_count('openudidmd5', 'make', train, test)
-    train, test = unique_count('idfamd5', 'make', train, test)
-
-    train, test = unique_count('adidmd5', 'pkgname', train, test)
-    train, test = unique_count('imeimd5', 'pkgname', train, test)
-    train, test = unique_count('macmd5', 'pkgname', train, test)
-    train, test = unique_count('openudidmd5', 'pkgname', train, test)
-    train, test = unique_count('idfamd5', 'pkgname', train, test)
-
-    # #特征target_encode
-    # train, test = feature_encode(train, test)
-    #
-    # #ip组合特征
-    # train, test = feature_concat(train, test)
-
+def to_save(train, test):
     print(train.columns)
     print(test.columns)
     print(train.info())
@@ -399,19 +310,92 @@ def model_input():
         pickle.dump(train, train_f)
     with open(MODEL + 'test.pk', 'wb') as test_f:
         pickle.dump(test, test_f)
+    sys.exit(-1)
+def model_input(track_point=1):
+    if track_point==0:
+        train = pd.read_csv(DATA + 'round1_iflyad_anticheat_traindata.txt', sep='\t', encoding='utf-8')
+        test = pd.read_csv(DATA + 'round1_iflyad_anticheat_testdata_feature.txt', sep='\t', encoding='utf-8')
+    else:
+        train = pd.read_pickle(MODEL + 'train.pk')
+        test = pd.read_pickle(MODEL + 'test.pk')
+                    # #处理orientation异常值
+                    # train.orientation[(train.orientation == 90) | (train.orientation == 2)] = 0
+                    # test.orientation[(test.orientation == 90) | (test.orientation == 2)] = 0
+                    # #carrier为-1就是未知0
+                    # train.carrier[train.carrier == -1] = 0
+                    # test.carrier[test.carrier == -1] = 0
+                    # #ntt 网络类型 0-未知, 1-有线网, 2-WIFI, 3-蜂窝网络未知, 4-2G, 5-3G, 6–4G
+                    # train.ntt[(train.ntt <= 0) | (train.ntt > 6)] = 0
+                    # train.ntt[(train.ntt <= 2) | (train.ntt >= 1)] = 1
+                    # test.ntt[(test.ntt <= 0) | (test.ntt > 6)] = 0
+                    # test.ntt[(test.ntt <= 2) | (test.ntt >= 1)] = 1
+
+    # train['udid'] = train['adidmd5'] + train['imeimd5'] + train['idfamd5'] + train['openudidmd5'] + train['macmd5']
+    # test['udid'] = test['adidmd5'] + test['imeimd5'] + test['idfamd5'] + test['openudidmd5'] + test['macmd5']
+    # fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
+    # print('null fill......')
+    # for ff in fillna_features:
+    #     train[ff] = train[ff].fillna('null')
+    #     test[ff] = test[ff].fillna('null')
+    # print('feature cut......')
+    # train, test = feature_cut(train, test)
+    # train = time_format(train) # 2019-06-03 2019-06-09
+    # test = time_format(test) # 2019-06-10
+    # train = md5_format(train)
+    # test = md5_format(test)
+    # city_pro = pd.read_csv("./model/省份城市对应表.csv", encoding='gbk')
+    # city_pro.columns = ['pro2', 'city']
+    # train = train.merge(city_pro, how='left', on='city')
+    # test = test.merge(city_pro, how='left', on='city')
+    # train['pro2'] = train['pro2'].fillna('null')
+    # test['pro2'] = test['pro2'].fillna('null')
+    # train['ip_cate'] = train.apply(lambda x: ip_cate(x['ip']), axis=1)
+    # test['ip_cate'] = test.apply(lambda x: ip_cate(x['ip']), axis=1)
+    # train['reqrealip_cate'] = train.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    # test['reqrealip_cate'] = test.apply(lambda x: ip_cate(x['reqrealip']), axis=1)
+    # train['ip_net'] = train.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+    # test['ip_net'] = test.apply(lambda x: ip_network(x['ip'], x['ip_cate']), axis=1)
+    # train['reqrealip_net'] = train.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
+    # test['reqrealip_net'] = test.apply(lambda x: ip_network(x['reqrealip'], x['reqrealip_cate']), axis=1)
+    # train['hw'] = train['h']*train['w']
+    # test['hw'] = test['h']*test['w']
+    # train['dpi'] = train['h'].astype('str') + '_' + train['w'].astype('str')
+    # test['dpi'] = test['h'].astype('str') + '_' + test['w'].astype('str')
+
+
+
+    #train, test = device_blacklist(train, test) #设备黑白名单处理
+    #train, test = black_rate(train, test) #黑名单率统计
+    #train, test = device_log(train, test) #设备登录密度
+
+    # for item in [['adidmd5','model'], ['imeimd5','model'], ['macmd5','model'], ['openudidmd5','model'], ['idfamd5','model'], ['udid','model'],
+    #              ['adidmd5','city'], ['imeimd5','city'], ['macmd5','city'], ['openudidmd5','city'], ['idfamd5','city'], ['udid','city'],
+    #              ['adidmd5','ip'], ['imeimd5','ip'], ['macmd5','ip'], ['openudidmd5','ip'], ['idfamd5','ip'], ['udid','ip'],
+    #              ['adidmd5','reqrealip'], ['imeimd5','reqrealip'], ['macmd5','reqrealip'], ['openudidmd5','reqrealip'], ['idfamd5','reqrealip'], ['udid','reqrealip'],
+    #              ['adidmd5','ip_net'], ['imeimd5','ip_net'], ['macmd5','ip_net'], ['openudidmd5','ip_net'], ['idfamd5','ip_net'], ['udid','ip_net'],
+    #              ['adidmd5','make'], ['imeimd5','make'], ['macmd5','make'], ['openudidmd5','make'], ['idfamd5','make'], ['udid','make'],
+    #              ['adidmd5','pkgname'], ['imeimd5','pkgname'], ['macmd5','pkgname'], ['openudidmd5','pkgname'], ['idfamd5','pkgname'], ['udid','pkgname'],
+    #              ['adidmd5','ver'], ['imeimd5','ver'], ['macmd5','ver'], ['openudidmd5','ver'], ['idfamd5','ver'], ['udid','ver'],
+    #              ['adidmd5','adunitshowid'], ['imeimd5','adunitshowid'], ['macmd5','adunitshowid'], ['openudidmd5','adunitshowid'], ['idfamd5','adunitshowid'], ['udid','adunitshowid'],
+    #              ['adidmd5','mediashowid'], ['imeimd5','mediashowid'], ['macmd5','mediashowid'], ['openudidmd5','mediashowid'], ['idfamd5','mediashowid'], ['udid','mediashowid'],
+    #              ['adidmd5','apptype'], ['imeimd5','apptype'], ['macmd5','apptype'], ['openudidmd5','apptype'], ['idfamd5','apptype'], ['udid','apptype'],]:
+    #     train, test = unique_count(item[0], item[1], train, test, 'ignore')
+
+    train, test = unique_count(['adidmd5','nginxtime_date'], 'ip', train, test, 'ignore')
+    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
+    train, test = unique_count(['macmd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
+    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
+    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
+
+    train, test = unique_count(['adidmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+    train, test = unique_count(['macmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+
+    to_save(train, test)
     # train.to_csv(MODEL + 'train.csv', encoding='utf-8', index=False)
     # test.to_csv(MODEL + 'test.csv', encoding='utf-8', index=False)
 
 if __name__ == "__main__":
     model_input()
-    # with open(MODEL + 'train.pk', 'rb') as train_f:
-    #     train = pickle.load(train_f)
-    # with open(MODEL + 'test.pk', 'rb') as test_f:
-    #     test = pickle.load(test_f)
-    # print(train[['adidmd5_model_nq']].head())
-    #
-    # train, test = feature_concat(train, test)
-    # with open(MODEL + 'train.pk', 'wb') as train_f:
-    #     pickle.dump(train, train_f)
-    # with open(MODEL + 'test.pk', 'wb') as test_f:
-    #     pickle.dump(test, test_f)
