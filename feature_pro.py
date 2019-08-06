@@ -6,6 +6,7 @@ import json
 import sys
 import datetime
 import pickle
+import re
 import warnings
 warnings.filterwarnings("ignore")
 DATA = './data/'
@@ -80,6 +81,29 @@ def md5_format(data):
     data['macmd5_0'] = data.apply(lambda x: 0 if x['macmd5'] == 'empty' else 1, axis=1)
     return data
 
+def model_pro(model):
+    b = model.lower()
+    c = re.split('[- _:%+]', b)
+    return c[0]
+def make_pro(make):
+    b = make.lower()
+
+    c = re.split('[-, ]', b)[0]
+    if c=='华为':
+        c = 'huawei'
+    elif c == '小米':
+        c = 'mi'
+    elif c =='荣耀':
+        c = 'rongyao'
+    elif c=='魅族':
+        c ='meizu'
+    elif c=='美图':
+        c='meitu'
+    elif c=='三星':
+        c='samsung'
+    else:
+        c=c
+    return c
 def ip_cate(ip):
     try:
         f_info = int(ip.split('.')[0])
@@ -117,6 +141,7 @@ def device_blacklist_pro(df_train, df_test):
         df_test = df_test.merge(wl, how='left', on=wbl)
         df_test[wbl + 'bl'] = df_test[wbl + 'bl'].fillna(0)
         df_test[wbl + 'wl'] = df_test[wbl + 'wl'].fillna(0)
+
         df_test[wbl + 'bl'] = df_test.apply(lambda x: 1 if x[wbl + 'bl'] > 0 else 0, axis=1)
         df_test[wbl + 'wl'] = df_test.apply(lambda x: 1 if x[wbl + 'wl'] > 0 else 0, axis=1)
     return df_test
@@ -127,7 +152,7 @@ def device_blacklist(train, test):
     test.drop(columns=drop_list, inplace=True)
     print(train.columns)
     train_pro = train[train['nginxtime_date'] == '2019-06-03']
-    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5', 'ip_net', 'reqrealip_net', 'ip', 'reqrealip', 'udid']
+    wblist = ['adidmd5', 'imeimd5', 'idfamd5', 'openudidmd5', 'macmd5', 'ip_net', 'reqrealip_net', 'ip', 'reqrealip']
     for wbl in wblist:
         train_pro[wbl + 'bl'] = train_pro['label']
         train_pro[wbl + 'wl'] = train_pro['label']
@@ -290,16 +315,24 @@ def unique_count(index_col, feature, df_data, sub, wtype):
 
     if name in df_data.columns:
         df_data.drop(columns=[name], inplace=True)
-    gp1 = df_data.groupby(index_col)[feature].nunique().reset_index().rename(
+    if name in sub.columns:
+        sub.drop(columns=[name], inplace=True)
+    combine = pd.concat([df_data, sub], axis=0)
+    gp1 = combine.groupby(index_col)[feature].nunique().reset_index().rename(
         columns={feature: name})
     df_data = pd.merge(df_data, gp1, how='left', on=index_col)
 
     if 'nginxtime_date' in name:
         gp2 = sub.groupby(index_col)[feature].nunique().reset_index().rename(columns={feature: name})
         sub = pd.merge(sub, gp2, how='left', on=index_col)
+        sub.fillna(np.mean(gp2[name]), inplace=True)
+        df_data.fillna(np.mean(gp2[name]), inplace=True)
+        return df_data, sub
     else:
         sub = pd.merge(sub, gp1, how='left', on=index_col)
-    return df_data.fillna(0), sub.fillna(0)
+        sub.fillna(np.mean(gp1[name]),inplace=True)
+        df_data.fillna(np.mean(gp1[name]), inplace=True)
+        return df_data, sub
 
 
 def to_save(train, test):
@@ -318,25 +351,31 @@ def model_input(track_point=1):
     else:
         train = pd.read_pickle(MODEL + 'train.pk')
         test = pd.read_pickle(MODEL + 'test.pk')
-                    # #处理orientation异常值
-                    # train.orientation[(train.orientation == 90) | (train.orientation == 2)] = 0
-                    # test.orientation[(test.orientation == 90) | (test.orientation == 2)] = 0
-                    # #carrier为-1就是未知0
-                    # train.carrier[train.carrier == -1] = 0
-                    # test.carrier[test.carrier == -1] = 0
-                    # #ntt 网络类型 0-未知, 1-有线网, 2-WIFI, 3-蜂窝网络未知, 4-2G, 5-3G, 6–4G
-                    # train.ntt[(train.ntt <= 0) | (train.ntt > 6)] = 0
-                    # train.ntt[(train.ntt <= 2) | (train.ntt >= 1)] = 1
-                    # test.ntt[(test.ntt <= 0) | (test.ntt > 6)] = 0
-                    # test.ntt[(test.ntt <= 2) | (test.ntt >= 1)] = 1
-
-    # train['udid'] = train['adidmd5'] + train['imeimd5'] + train['idfamd5'] + train['openudidmd5'] + train['macmd5']
-    # test['udid'] = test['adidmd5'] + test['imeimd5'] + test['idfamd5'] + test['openudidmd5'] + test['macmd5']
+    # # #处理orientation异常值
+    # # train.orientation[(train.orientation == 90) | (train.orientation == 2)] = 0
+    # # test.orientation[(test.orientation == 90) | (test.orientation == 2)] = 0
+    # # #carrier为-1就是未知0
+    # # train.carrier[train.carrier == -1] = 0
+    # # test.carrier[test.carrier == -1] = 0
+    # # #ntt 网络类型 0-未知, 1-有线网, 2-WIFI, 3-蜂窝网络未知, 4-2G, 5-3G, 6–4G
+    # # train.ntt[(train.ntt <= 0) | (train.ntt > 6)] = 0
+    # # train.ntt[(train.ntt <= 2) | (train.ntt >= 1)] = 1
+    # # test.ntt[(test.ntt <= 0) | (test.ntt > 6)] = 0
+    # # test.ntt[(test.ntt <= 2) | (test.ntt >= 1)] = 1
+    #
     # fillna_features = ['ver', 'city', 'lan', 'make', 'model', 'osv']
     # print('null fill......')
     # for ff in fillna_features:
     #     train[ff] = train[ff].fillna('null')
     #     test[ff] = test[ff].fillna('null')
+    #
+    # # # model处理
+    # # train['model'] = train.apply(lambda x: model_pro(x['model']), axis=1)
+    # # test['model'] = test.apply(lambda x: model_pro(x['model']), axis=1)
+    # # train['make'] = train.apply(lambda x: make_pro(x['make']), axis=1)
+    # # test['make'] = test.apply(lambda x: make_pro(x['make']), axis=1)
+    #
+    #
     # print('feature cut......')
     # train, test = feature_cut(train, test)
     # train = time_format(train) # 2019-06-03 2019-06-09
@@ -361,37 +400,64 @@ def model_input(track_point=1):
     # test['hw'] = test['h']*test['w']
     # train['dpi'] = train['h'].astype('str') + '_' + train['w'].astype('str')
     # test['dpi'] = test['h'].astype('str') + '_' + test['w'].astype('str')
+    #
+    #
+    #
+    # train, test = device_blacklist(train, test) #设备黑白名单处理
+    # train, test = black_rate(train, test) #黑名单率统计
+    # train, test = device_log(train, test) #设备登录密度
+    write = 'replace'
+    for item in [['adidmd5','model'], ['imeimd5','model'], ['macmd5','model'], ['openudidmd5','model'], ['idfamd5','model'],
+                 ['adidmd5','city'], ['imeimd5','city'], ['macmd5','city'], ['openudidmd5','city'], ['idfamd5','city'],
+                 ['adidmd5','ip'], ['imeimd5','ip'], ['macmd5','ip'], ['openudidmd5','ip'], ['idfamd5','ip'],
+                 ['adidmd5','reqrealip'], ['imeimd5','reqrealip'], ['macmd5','reqrealip'], ['openudidmd5','reqrealip'], ['idfamd5','reqrealip'],
+                 ['adidmd5','ip_net'], ['imeimd5','ip_net'], ['macmd5','ip_net'], ['openudidmd5','ip_net'], ['idfamd5','ip_net'],
+                 ['adidmd5','make'], ['imeimd5','make'], ['macmd5','make'], ['openudidmd5','make'], ['idfamd5','make'],
+                 ['adidmd5','pkgname'], ['imeimd5','pkgname'], ['macmd5','pkgname'], ['openudidmd5','pkgname'], ['idfamd5','pkgname'],
+                 ['adidmd5','ver'], ['imeimd5','ver'], ['macmd5','ver'], ['openudidmd5','ver'], ['idfamd5','ver'],
+                 ['adidmd5','adunitshowid'], ['imeimd5','adunitshowid'], ['macmd5','adunitshowid'], ['openudidmd5','adunitshowid'], ['idfamd5','adunitshowid'],
+                 ['adidmd5','mediashowid'], ['imeimd5','mediashowid'], ['macmd5','mediashowid'], ['openudidmd5','mediashowid'], ['idfamd5','mediashowid'],
+                 ['adidmd5','apptype'], ['imeimd5','apptype'], ['macmd5','apptype'], ['openudidmd5','apptype'], ['idfamd5','apptype'],
+                 ['adidmd5','nginxtime_hour'], ['imeimd5','nginxtime_hour'], ['macmd5','nginxtime_hour'], ['openudidmd5','nginxtime_hour'], ['idfamd5','nginxtime_hour'],]:
+        train, test = unique_count(item[0], item[1], train, test, write)
 
+    train, test = unique_count(['adidmd5','nginxtime_date'], 'ip', train, test, write)
+    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'ip', train, test, write)
+    train, test = unique_count(['macmd5', 'nginxtime_date'], 'ip', train, test, write)
+    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'ip', train, test, write)
+    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'ip', train, test, write)
 
+    train, test = unique_count(['adidmd5', 'nginxtime_date'], 'pkgname', train, test, write)
+    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'pkgname', train, test, write)
+    train, test = unique_count(['macmd5', 'nginxtime_date'], 'pkgname', train, test, write)
+    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'pkgname', train, test, write)
+    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'pkgname', train, test, write)
 
-    #train, test = device_blacklist(train, test) #设备黑白名单处理
-    #train, test = black_rate(train, test) #黑名单率统计
-    #train, test = device_log(train, test) #设备登录密度
+    train, test = unique_count(['adidmd5', 'apptype'], 'pkgname', train, test, write)
+    train, test = unique_count(['imeimd5', 'apptype'], 'pkgname', train, test, write)
+    train, test = unique_count(['macmd5', 'apptype'], 'pkgname', train, test, write)
+    train, test = unique_count(['openudidmd5', 'apptype'], 'pkgname', train, test, write)
+    train, test = unique_count(['idfamd5', 'apptype'], 'pkgname', train, test, write)
 
-    # for item in [['adidmd5','model'], ['imeimd5','model'], ['macmd5','model'], ['openudidmd5','model'], ['idfamd5','model'], ['udid','model'],
-    #              ['adidmd5','city'], ['imeimd5','city'], ['macmd5','city'], ['openudidmd5','city'], ['idfamd5','city'], ['udid','city'],
-    #              ['adidmd5','ip'], ['imeimd5','ip'], ['macmd5','ip'], ['openudidmd5','ip'], ['idfamd5','ip'], ['udid','ip'],
-    #              ['adidmd5','reqrealip'], ['imeimd5','reqrealip'], ['macmd5','reqrealip'], ['openudidmd5','reqrealip'], ['idfamd5','reqrealip'], ['udid','reqrealip'],
-    #              ['adidmd5','ip_net'], ['imeimd5','ip_net'], ['macmd5','ip_net'], ['openudidmd5','ip_net'], ['idfamd5','ip_net'], ['udid','ip_net'],
-    #              ['adidmd5','make'], ['imeimd5','make'], ['macmd5','make'], ['openudidmd5','make'], ['idfamd5','make'], ['udid','make'],
-    #              ['adidmd5','pkgname'], ['imeimd5','pkgname'], ['macmd5','pkgname'], ['openudidmd5','pkgname'], ['idfamd5','pkgname'], ['udid','pkgname'],
-    #              ['adidmd5','ver'], ['imeimd5','ver'], ['macmd5','ver'], ['openudidmd5','ver'], ['idfamd5','ver'], ['udid','ver'],
-    #              ['adidmd5','adunitshowid'], ['imeimd5','adunitshowid'], ['macmd5','adunitshowid'], ['openudidmd5','adunitshowid'], ['idfamd5','adunitshowid'], ['udid','adunitshowid'],
-    #              ['adidmd5','mediashowid'], ['imeimd5','mediashowid'], ['macmd5','mediashowid'], ['openudidmd5','mediashowid'], ['idfamd5','mediashowid'], ['udid','mediashowid'],
-    #              ['adidmd5','apptype'], ['imeimd5','apptype'], ['macmd5','apptype'], ['openudidmd5','apptype'], ['idfamd5','apptype'], ['udid','apptype'],]:
-    #     train, test = unique_count(item[0], item[1], train, test, 'ignore')
+    train, test = unique_count(['adidmd5', 'city'], 'ip', train, test, write)
+    train, test = unique_count(['imeimd5', 'city'], 'ip', train, test, write)
+    train, test = unique_count(['macmd5', 'city'], 'ip', train, test, write)
+    train, test = unique_count(['openudidmd5', 'city'], 'ip', train, test, write)
+    train, test = unique_count(['idfamd5', 'city'], 'ip', train, test, write)
 
-    train, test = unique_count(['adidmd5','nginxtime_date'], 'ip', train, test, 'ignore')
-    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
-    train, test = unique_count(['macmd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
-    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
-    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'ip', train, test, 'ignore')
+    def device_date_order(train, test, feature):
+        train_rank = train.groupby(['nginxtime_date',feature])['nginxtime'].rank(method='first')
+        test_rank = test.groupby(['nginxtime_date',feature])['nginxtime'].rank(method='first')
+        train[f'{feature}_date_rank'] = train_rank
+        test[f'{feature}_date_rank'] = test_rank
+        return train, test
 
-    train, test = unique_count(['adidmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
-    train, test = unique_count(['imeimd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
-    train, test = unique_count(['macmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
-    train, test = unique_count(['openudidmd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
-    train, test = unique_count(['idfamd5', 'nginxtime_date'], 'pkgname', train, test, 'ignore')
+    train, test = device_date_order(train, test, 'adidmd5')
+    train, test = device_date_order(train, test, 'imeimd5')
+    train, test = device_date_order(train, test, 'macmd5')
+    train, test = device_date_order(train, test, 'openudidmd5')
+    train, test = device_date_order(train, test, 'idfamd5')
+    train, test = device_date_order(train, test, 'ip_net')
 
     to_save(train, test)
     # train.to_csv(MODEL + 'train.csv', encoding='utf-8', index=False)
@@ -399,3 +465,4 @@ def model_input(track_point=1):
 
 if __name__ == "__main__":
     model_input()
+
