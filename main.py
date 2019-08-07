@@ -41,6 +41,7 @@ if __name__ == "__main__":
     #if offline == False:
     #    rate_features = [i.replace('_offline','') for i in rate_features]
     wl_features = ['adidmd5bl', 'adidmd5wl',  'macmd5bl', 'macmd5wl',   'imeimd5bl', 'imeimd5wl']
+    device_features = ['adidmd5',  'macmd5',   'imeimd5', 'openudidmd5', 'idfamd5', 'ip', 'reqrealip']
     active_features = [ 'adidmd5_counts', 'idfamd5_counts', 'imeimd5_counts', 'macmd5_counts', 'openudidmd5_counts']
     label_features = ['pkgname','adunitshowid','mediashowid','ver','city','lan','make','model','os','osv','pro2', 'ip_cate', 'ntt', 'carrier', 'orientation', 'province','apptype','dpi']
     only_features = []
@@ -55,7 +56,7 @@ if __name__ == "__main__":
                                 'apptype', 'dpi']
     category_nullone_features = []
     numerical_features = ['h','w','ppi','hw','adidmd5_0','openudidmd5_0','macmd5_0', ] \
-                         + wl_features
+                         + wl_features + device_features
 
     features = {
         'label_features':label_features,
@@ -81,8 +82,8 @@ if __name__ == "__main__":
         model_test['label'] = model_test.apply(lambda x: 1 if x['pre_proba']>0.5 else 0, axis=1)
         model_test[['sid','label']].to_csv('submit/submission.csv', index=False, encoding='utf-8')
 
-        model_train[['sid', 'pre_proba']].to_csv(MODEL + f'train_track_{model_type}.csv', index=False, encoding='utf-8')
-        model_test[['sid', 'pre_proba']].to_csv(MODEL + f'test_track_{model_type}.csv', index=False, encoding='utf-8')
+        #model_train[['sid', 'pre_proba']].to_csv(MODEL + f'train_track_{model_type}.csv', index=False, encoding='utf-8')
+        #model_test[['sid', 'pre_proba']].to_csv(MODEL + f'test_track_{model_type}.csv', index=False, encoding='utf-8')
         print(f'score {train_f1}')
 
 '''
@@ -109,4 +110,8 @@ cmake -A x64 -DUSE_GPU=1 -DBOOST_ROOT=C:/local/boost_1_70_0 -DBOOST_LIBRARYDIR=C
 pip install lightgbm --install-option=--gpu --install-option="--opencl-include-dir=/usr/local/cuda/include/" --install-option="--opencl-library=/usr/local/cuda/lib64/libOpenCL.so"
 
 
+'''
+
+'''
+score 0.9478140701677671
 '''
