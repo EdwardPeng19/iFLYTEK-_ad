@@ -18,10 +18,10 @@ if __name__ == "__main__":
     # test = pd.read_csv(MODEL + 'test.csv', encoding='utf-8')
     train = pd.read_pickle(MODEL + 'train.pk')
     test = pd.read_pickle(MODEL + 'test.pk')
-    train['nginxtime_hour'] = train['nginxtime_hour'].astype(float)
-    test['nginxtime_hour'] = test['nginxtime_hour'].astype(float)
-    train['nginxtime_hour'] = train.apply(lambda  x: cut_hour(x['nginxtime_hour']), axis=1)
-    test['nginxtime_hour'] = test.apply(lambda x: cut_hour(x['nginxtime_hour']), axis=1)
+    # train['nginxtime_hour'] = train['nginxtime_hour'].astype(float)
+    # test['nginxtime_hour'] = test['nginxtime_hour'].astype(float)
+    # train['nginxtime_hour'] = train.apply(lambda  x: cut_hour(x['nginxtime_hour']), axis=1)
+    # test['nginxtime_hour'] = test.apply(lambda x: cut_hour(x['nginxtime_hour']), axis=1)
 
     train['deviceid_sum'] = train['adidmd5_0'] + train['imeimd5_0'] + train['idfamd5_0'] + train['openudidmd5_0'] + train['macmd5_0']
     test['deviceid_sum'] = test['adidmd5_0'] + test['imeimd5_0'] + test['idfamd5_0'] + test['openudidmd5_0'] + test['macmd5_0']
@@ -51,12 +51,12 @@ if __name__ == "__main__":
         # for el2 in [['apptype','pkgname'], ['city','ip']]:
         #     only_features.append(f'{de}_{el2[0]}_{el2[1]}_nq')
     order_features = ['idfamd5_date_rank', 'adidmd5_date_rank', 'openudidmd5_date_rank', 'macmd5_date_rank', 'imeimd5_date_rank', 'ip_net_date_rank']
-    category_onehot_features = ['city', 'lan', 'os', 'osv', 'pro2', 'pkgname', 'adunitshowid', 'mediashowid', 'ver',
-                                'make', 'model', 'nginxtime_hour', 'ip_cate', 'ntt', 'carrier', 'orientation',
-                                'apptype', 'dpi']
+    category_onehot_features = ['city', 'lan', 'os', 'osv', 'province', 'pkgname', 'adunitshowid', 'mediashowid', 'ver',
+                                'make', 'model', 'nginxtime_hour', 'ntt', 'carrier', 'orientation',
+                                'apptype']
     category_nullone_features = []
-    numerical_features = ['h','w','ppi','hw','adidmd5_0','openudidmd5_0','macmd5_0', ] \
-                         + wl_features + device_features
+    numerical_features = ['h','w','ppi'] \
+                         + device_features
 
     features = {
         'label_features':label_features,
@@ -114,4 +114,6 @@ pip install lightgbm --install-option=--gpu --install-option="--opencl-include-d
 
 '''
 score 0.9478140701677671
+score 0.9908276959601633  94.31
+score 0.9923489176390827 94.32
 '''
